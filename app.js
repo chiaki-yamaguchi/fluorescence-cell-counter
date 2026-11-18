@@ -1,5 +1,14 @@
 'use strict';
 const $ = id => document.getElementById(id);
+const palette = {
+  red: {rgb:[1,0,0], ink:'#ff5757'},
+  green: {rgb:[0,1,0], ink:'#48e76d'},
+  blue: {rgb:[0,0,1], ink:'#80aaff'},
+  magenta: {rgb:[1,0,1], ink:'#f17df2'},
+};
+const colorChoice = channel => $('color'+channel).value;
+const colorFor = channel => palette[colorChoice(channel)];
+
 const worker = new Worker('worker.js');
 let field = null;
 let preview = null;
@@ -89,32 +98,56 @@ function toneMapper(channel) {
   return value => table[Math.max(0,Math.min(255,Math.round(value)))];
 }
 
+function paintImage(context, view) {
+  const showA = view !== 'b';
+  const showB = view !== 'a';
+  const source = showA ? preview.red : preview.green;
+  const {w,h} = source;
+  const image = context.createImageData(w,h);
+  const rgbA = colorFor('A').rgb;
+  const rgbB = colorFor('B').rgb;
+  const adjustA = toneMapper('A');
+  const adjustB = toneMapper('B');
+  for (let i=0;i<w*h;i++) {
+    const a = showA ? adjustA(preview.red.intensity[i]) : 0;
+    const b = showB ? adjustB(preview.green.intensity[i]) : 0;
+    for (let c=0;c<3;c++) image.data[i*4+c] = a*rgbA[c]+b*rgbB[c];
+    image.data[i*4+3] = 255;
+  }
+  context.putImageData(image,0,0);
+}
+
+function paintMarkers(context, view, width) {
+  context.lineWidth = Math.max(1.25,width/700);
+  for (const key of view === 'merge' ? ['a','b'] : [view]) {
+    context.fillStyle = colorFor(key.toUpperCase()).ink;
+    context.strokeStyle = '#fff';
+    for (const {x,y} of field.result[key]) {
+      context.beginPath();
+      context.arc(x,y,view === 'merge' && key === 'a' ? 4 : 2.5,0,Math.PI*2);
+      context.fill();
+      context.stroke();
+    }
+  }
+}
+
+for (const channel of ['A','B']) {
+  const select = $('color'+channel);
+  select.onchange = () => {
+    document.documentElement.style.setProperty('--channel-'+channel.toLowerCase(),colorFor(channel).ink);
+    display();
+  };
+}
+
 function display() {
   if (!field || !preview) return;
   const view = manualView;
-  const source = view === 'b' ? preview.green : preview.red;
-  const {w,h,rgb} = source;
-  const {result} = field;
-  const image = ctx.createImageData(w,h);
   const merged = view === 'merge';
-  const showA = merged || view === 'a';
-  const adjustA = toneMapper('A');
-  const adjustB = toneMapper('B');
+  const {w,h} = view === 'b' ? preview.green : preview.red;
+  const {result} = field;
   $('toneControls').hidden = false;
   $('toneA').hidden = !result.enabledA;
   $('toneB').hidden = !result.enabledB;
-  const showB = merged || view === 'b';
-  for (let i=0;i<w*h;i++) {
-    const j = i*4;
-    if (merged) {
-      image.data[j] = adjustA(preview.red.rgb[0][i]);
-      image.data[j+1] = adjustB(preview.green.rgb[1][i]);
-    } else {
-      const adjust = showA ? adjustA : adjustB;
-      for (let c=0;c<3;c++) image.data[j+c] = adjust(rgb[c][i]);
-    }
-    image.data[j+3] = 255;
-  }
   canvas.width = w;
   canvas.height = h;
   $('zoomBar').hidden = false;
@@ -132,20 +165,9 @@ function display() {
   $('redImage').setAttribute('aria-pressed',String(manualView === 'a'));
   $('greenImage').setAttribute('aria-pressed',String(manualView === 'b'));
   $('empty').hidden = true;
-  ctx.putImageData(image,0,0);
-  ctx.lineWidth = Math.max(1.25,w/700);
-  for (const [key,color,visible] of [['a','#ff5757',showA],['b','#48e76d',showB]]) {
-    if (!visible) continue;
-    ctx.fillStyle = color;
-    ctx.strokeStyle = '#fff';
-    for (const point of result[key]) {
-      ctx.beginPath();
-      ctx.arc(point.x,point.y,merged && key === 'a' ? 4 : 2.5,0,Math.PI*2);
-      ctx.fill();
-      ctx.stroke();
-    }
-  }
-  if (selected && (merged || (selected.keys[0] === 'a' ? showA : showB))) {
+  paintImage(ctx,view);
+  paintMarkers(ctx,view,w);
+  if (selected && (merged || selected.keys.includes(view))) {
     const {x,y,radius} = selected.point;
     ctx.beginPath();
     ctx.strokeStyle = '#ffffff';
@@ -158,14 +180,14 @@ function display() {
   $('countB').textContent = result.enabledB ? result.b.length : '—';
   const percent = countRatioPercent(result);
   $('countPercent').textContent = percent === '' ? '—' : `${percent}%`;
-  $('countPercent').title = percent === '' ? '' : `Green ${result.b.length} ÷ Red ${result.a.length} × 100`;
+  $('countPercent').title = percent === '' ? '' : `B ${result.b.length} ÷ A ${result.a.length} × 100`;
   $('undo').disabled = !field.history.length;
   $('png').disabled = false;
   $('mergedPng').hidden = !preview.red || !preview.green;
   $('mergedPng').disabled = $('mergedPng').hidden ||
     preview.red?.w !== preview.green?.w || preview.red?.h !== preview.green?.h;
-  $('mergedOptions').hidden = !preview.red;
-  $('mergedPng').title = $('mergedPng').disabled ? 'Registered red and green images of the same size are required.' : 'Save the combined red and green image as PNG.';
+  $('mergedOptions').hidden = false;
+  $('mergedPng').title = $('mergedPng').disabled ? 'Registered channel images of the same size are required.' : 'Save the channel overlay as PNG.';
   document.body.classList.add('manualLoaded');
   applyZoom();
 }
@@ -295,51 +317,23 @@ function save(blob,name) {
   setTimeout(() => URL.revokeObjectURL(link.href),1000);
 }
 $('png').onclick = () => {
-  if (requestPending || $('png').disabled) return;
-  if (manualView !== 'b') {
-    saveRbpmsPng(manualView === 'merge');
-    return;
-  }
-  const source = field.greenFile;
-  const name = source.name.replace(/\.[^.]+$/,'');
-  canvas.toBlob(blob => { if (blob) save(blob,`${name}-overlay.png`); },'image/png');
+  if (!requestPending && !$('png').disabled) saveImagePng(manualView);
 };
 $('mergedPng').onclick = () => {
-  if (requestPending || $('mergedPng').disabled) return;
-  saveRbpmsPng(true);
+  if (!requestPending && !$('mergedPng').disabled) saveImagePng('merge');
 };
 
-function saveRbpmsPng(includeGreen) {
-  const {red,green} = preview;
-  const magenta = $('mergedColor').value === 'magenta';
+function saveImagePng(view) {
+  const source = view === 'b' ? preview.green : preview.red;
   const output = document.createElement('canvas');
-  output.width = red.w;
-  output.height = red.h;
+  output.width = source.w;
+  output.height = source.h;
   const context = output.getContext('2d');
-  const pixels = context.createImageData(red.w,red.h);
-  const adjustA = toneMapper('A');
-  const adjustB = toneMapper('B');
-  for (let i=0;i<red.w*red.h;i++) {
-    pixels.data[i*4] = adjustA(red.rgb[0][i]);
-    pixels.data[i*4+1] = includeGreen ? adjustB(green.rgb[1][i]) : 0;
-    pixels.data[i*4+2] = magenta ? pixels.data[i*4] : 0;
-    pixels.data[i*4+3] = 255;
-  }
-  context.putImageData(pixels,0,0);
-  const markers = [['a',magenta ? '#ff57ff' : '#ff5757']];
-  if (includeGreen) markers.push(['b','#48e76d']);
-  for (const [key,color] of $('mergedMarkers').checked ? markers : []) {
-    context.strokeStyle = color;
-    context.lineWidth = 1.5;
-    for (const {x,y} of field.result[key]) {
-      context.beginPath();
-      context.arc(x,y,includeGreen && key === 'a' ? 4 : 2.5,0,Math.PI*2);
-      context.stroke();
-    }
-  }
-  const name = field.redFile.name.replace(/\.[^.]+$/,'');
-  const color = magenta ? 'magenta' : 'red';
-  const suffix = includeGreen ? color+'-green' : color;
+  paintImage(context,view);
+  if ($('mergedMarkers').checked) paintMarkers(context,view,source.w);
+  const file = view === 'b' ? field.greenFile : field.redFile;
+  const name = file.name.replace(/\.[^.]+$/,'');
+  const suffix = view === 'merge' ? colorChoice('A')+'-'+colorChoice('B')+'-overlay' : colorChoice(view.toUpperCase());
   output.toBlob(blob => { if (blob) save(blob,`${name}-${suffix}.png`); },'image/png');
 }
 $('csv').onclick = () => {
@@ -349,7 +343,7 @@ $('csv').onclick = () => {
   };
   const {redFile,greenFile,result} = field;
   const rows = [
-    ['RBPMS image','EGFP image','RBPMS count','EGFP count','EGFP / RBPMS (%)'],
+    ['Channel A image','Channel B image','Channel A count','Channel B count','B / A (%)'],
     [redFile?.name || '',greenFile?.name || '',result.enabledA ? result.a.length : '',
       result.enabledB ? result.b.length : '',countRatioPercent(result)],
   ];

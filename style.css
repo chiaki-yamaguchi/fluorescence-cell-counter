@@ -36,11 +36,11 @@ button:disabled,input:disabled{opacity:.48;cursor:default}
 .counts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 .counts div{background:#131a26;border:1px solid var(--line);padding:8px 12px;border-radius:8px}
 .counts span{color:var(--muted);font-size:11px}
-.counts strong{display:block;font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--red)}
-.counts div:nth-child(2) strong{color:var(--green)}
+.counts strong{display:block;font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--channel-a,var(--red))}
+.counts div:nth-child(2) strong{color:var(--channel-b,var(--green))}
 .counts div:nth-child(3) strong{color:var(--text)}
-#labelA{color:var(--red)}
-#labelB{color:var(--green)}
+#labelA{color:var(--channel-a,var(--red))}
+#labelB{color:var(--channel-b,var(--green))}
 .viewer{display:grid;place-items:center;background:#090d14;border:1px solid var(--line);min-height:350px;overflow:hidden;border-radius:8px;color:var(--muted)}
 canvas{display:block;width:100%;height:auto}
 canvas.edit{cursor:crosshair}
@@ -70,8 +70,8 @@ canvas.edit{cursor:crosshair}
 .viewer.zoomed canvas{justify-self:start;margin:0}
 .method{margin-bottom:12px}
 .manualBar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-#redImage[aria-pressed=true]{border-color:var(--red);color:var(--red)}
-#greenImage[aria-pressed=true]{border-color:var(--green);color:var(--green)}
+#redImage[aria-pressed=true]{border-color:var(--channel-a,var(--red));color:var(--channel-a,var(--red))}
+#greenImage[aria-pressed=true]{border-color:var(--channel-b,var(--green));color:var(--channel-b,var(--green))}
 .viewer.fit{min-height:0}
 .review{margin:0 0 8px}
 .resultHead .actions{flex-wrap:wrap}
@@ -86,8 +86,8 @@ canvas.edit{cursor:crosshair}
 #toneControls label{grid-template-columns:78px minmax(0,1fr) 36px;align-items:center}
 #toneControls output{text-align:right;font-variant-numeric:tabular-nums}
 #toneControls input[type=range]{width:100%;min-width:0;accent-color:var(--accent)}
-#toneA legend{color:var(--red)}
-#toneB legend{color:var(--green)}
+#toneA legend{color:var(--channel-a,var(--red))}
+#toneB legend{color:var(--channel-b,var(--green))}
 .mergedOptions{display:flex;flex-wrap:wrap;align-items:end;gap:6px 14px;margin-bottom:10px}
 
 .file-picker{position:relative;display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;cursor:pointer}
@@ -95,3 +95,5 @@ canvas.edit{cursor:crosshair}
 .file-button{flex:none;border:1px solid #54617a;border-radius:5px;padding:3px 7px}
 .file-picker:focus-within .file-button{outline:2px solid currentColor;outline-offset:2px}
 .file-selection{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.channel-color{margin-top:8px}

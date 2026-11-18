@@ -21,13 +21,15 @@ self.onmessage = async ({data:{redFile, greenFile}}) => {
     async function readChannel(file) {
       if (!file) return null;
       const {w,h,planes} = await read(file);
-      const rgb = (planes.length === 1 ? Array(3).fill(planes[0]) : planes)
-        .map(plane => Uint8ClampedArray.from(plane));
-      return {w,h,rgb};
+      const [r,g,b] = planes;
+      const intensity = g && b
+        ? Uint8ClampedArray.from(r,(value,i) => Math.max(value,g[i],b[i]))
+        : Uint8ClampedArray.from(r);
+      return {w,h,intensity};
     }
     const red = await readChannel(redFile);
     const green = await readChannel(greenFile);
-    const buffers = [red,green].filter(Boolean).flatMap(image => image.rgb.map(plane => plane.buffer));
+    const buffers = [red,green].filter(Boolean).map(image => image.intensity.buffer);
     self.postMessage({result:{red,green}},buffers);
   } catch (error) {
     self.postMessage({error:error.message});

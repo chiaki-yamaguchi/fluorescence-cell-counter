@@ -11,21 +11,21 @@
 <body>
 <header><div class="wrap brand"><span class="logo" aria-hidden="true">⊕</span> Fluorescence Cell Counter</div></header>
 <main class="wrap">
-  <div class="intro"><h1>Fluorescence Cell Counter</h1><p>Switch between fluorescence channels and click cell bodies to count them.</p></div>
+  <div class="intro"><h1>Fluorescence Cell Counter</h1><p>Choose a display color for each image and click cell bodies to count them.</p></div>
   <div class="layout">
     <form class="panel controls" id="form">
       <h2>Images</h2>
-      <label class="file"><span id="primaryLabel">Red image (RBPMS)</span><span class="file-picker"><input id="files" type="file" accept="image/*,.tif,.tiff"><span class="file-button" aria-hidden="true">Choose file</span><span class="file-selection" aria-live="polite">No files selected</span></span></label>
-      <label class="file" id="pairedLabel"><span id="secondaryLabel">Green image (EGFP)</span> <small id="pairedHint">You can count using either image alone.</small><span class="file-picker"><input id="paired" type="file" accept="image/*,.tif,.tiff"><span class="file-button" aria-hidden="true">Choose file</span><span class="file-selection" aria-live="polite">No files selected</span></span></label>
+      <div class="file"><label for="files">Channel A image</label><span class="file-picker"><input id="files" type="file" accept="image/*,.tif,.tiff"><span class="file-button" aria-hidden="true">Choose file</span><span class="file-selection" aria-live="polite">No files selected</span></span><label class="channel-color">Display color<select id="colorA" aria-label="Channel A display color"><option value="red" selected>Red</option><option value="green">Green</option><option value="blue">Blue</option><option value="magenta">Magenta</option></select></label></div>
+      <div class="file" id="pairedLabel"><label for="paired">Channel B image</label> <small id="pairedHint">You can count using either image alone.</small><span class="file-picker"><input id="paired" type="file" accept="image/*,.tif,.tiff"><span class="file-button" aria-hidden="true">Choose file</span><span class="file-selection" aria-live="polite">No files selected</span></span><label class="channel-color">Display color<select id="colorB" aria-label="Channel B display color"><option value="red">Red</option><option value="green" selected>Green</option><option value="blue">Blue</option><option value="magenta">Magenta</option></select></label></div>
       <p class="hint">PNG, JPEG, or TIFF (8- or 16-bit, LZW or uncompressed). The first TIFF page is used. Images are processed locally in your browser.</p>
       <button class="primary" id="run">Open images</button>
       <p id="status" role="status" class="hint"></p>
       <details id="toneControls" hidden><summary>Image brightness and contrast</summary>
-        <fieldset id="toneA"><legend>Red</legend>
+        <fieldset id="toneA"><legend>Channel A</legend>
           <label>Brightness<input id="brightnessA" type="range" min="50" max="200" value="100"><output id="brightnessAValue">100%</output></label>
           <label>Contrast<input id="contrastA" type="range" min="50" max="200" value="100"><output id="contrastAValue">100%</output></label>
         </fieldset>
-        <fieldset id="toneB"><legend>Green</legend>
+        <fieldset id="toneB"><legend>Channel B</legend>
           <label>Brightness<input id="brightnessB" type="range" min="50" max="200" value="100"><output id="brightnessBValue">100%</output></label>
           <label>Contrast<input id="contrastB" type="range" min="50" max="200" value="100"><output id="contrastBValue">100%</output></label>
         </fieldset>
@@ -35,13 +35,12 @@
     <section class="panel results" aria-labelledby="resultTitle">
       <div class="resultHead"><h2 id="resultTitle">Counts and exports</h2><div class="actions"><button type="button" id="png" disabled>Save image PNG</button><button type="button" id="mergedPng" hidden disabled>Save overlay PNG</button><button type="button" id="csv" disabled>Export CSV</button></div></div>
       <div id="mergedOptions" class="mergedOptions" hidden>
-        <label>RBPMS color in PNG<select id="mergedColor"><option value="red">Red</option><option value="magenta">Magenta</option></select></label>
         <label class="overlayToggle"><input id="mergedMarkers" type="checkbox" checked> Include count markers</label>
       </div>
-      <div class="counts"><div><span id="labelA">Red</span><strong id="countA">—</strong></div><div><span id="labelB">Green</span><strong id="countB">—</strong></div><div><span id="labelPercent">Green ÷ Red</span><strong id="countPercent">—</strong></div></div>
+      <div class="counts"><div><span id="labelA">Channel A</span><strong id="countA">—</strong></div><div><span id="labelB">Channel B</span><strong id="countB">—</strong></div><div><span id="labelPercent">B ÷ A</span><strong id="countPercent">—</strong></div></div>
       <div class="manualBar" id="manualBar" hidden>
-        <div class="actions"><button type="button" id="redImage" aria-pressed="true">Red image</button><button type="button" id="greenImage" aria-pressed="false">Green image</button><button type="button" id="bothImages" aria-pressed="false">Overlay</button></div>
-        <span class="hint">With registered images of the same size, adding markers in the green or overlay view updates both channels.</span>
+        <div class="actions"><button type="button" id="redImage" aria-pressed="true">Channel A</button><button type="button" id="greenImage" aria-pressed="false">Channel B</button><button type="button" id="bothImages" aria-pressed="false">Overlay</button></div>
+        <span class="hint">With registered images of the same size, adding markers in Channel B or Overlay updates both channels.</span>
       </div>
       <div class="zoomBar" id="zoomBar" hidden>
         <label>Zoom<select id="zoom"><option value="fit">Fit image to window</option><option value="1">Actual size (100%)</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option><option value="4">400%</option></select></label>
