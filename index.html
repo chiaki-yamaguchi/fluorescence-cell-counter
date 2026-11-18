@@ -6,9 +6,6 @@
 <title>Fluorescence Cell Counter</title>
 <meta name="description" content="Browser-based annotation and counting for fluorescence microscopy images.">
 <link rel="stylesheet" href="style.css">
-<script src="detect.js" defer></script>
-<script src="measure.js" defer></script>
-<script src="size-ui.js" defer></script>
 <script src="app.js" defer></script>
 </head>
 <body>
@@ -17,24 +14,10 @@
   <div class="intro"><h1>Fluorescence Cell Counter</h1><p>Switch between fluorescence channels and click cell bodies to count them.</p></div>
   <div class="layout">
     <form class="panel controls" id="form">
-      <h2>Images and counting method</h2>
-      <label class="method">Counting method<select id="method"><option value="manual">Manual counting</option><option value="auto">Automatic detection</option></select></label>
-      <label class="file"><span id="primaryLabel">Red image (RBPMS)</span><input id="files" type="file" multiple accept="image/*,.tif,.tiff"></label>
-      <label class="file" id="pairedLabel"><span id="secondaryLabel">Green image (EGFP)</span> <small id="pairedHint">You can count using either image alone.</small><input id="paired" type="file" accept="image/*,.tif,.tiff"></label>
+      <h2>Images</h2>
+      <label class="file"><span id="primaryLabel">Red image (RBPMS)</span><span class="file-picker"><input id="files" type="file" accept="image/*,.tif,.tiff"><span class="file-button" aria-hidden="true">Choose file</span><span class="file-selection" aria-live="polite">No files selected</span></span></label>
+      <label class="file" id="pairedLabel"><span id="secondaryLabel">Green image (EGFP)</span> <small id="pairedHint">You can count using either image alone.</small><span class="file-picker"><input id="paired" type="file" accept="image/*,.tif,.tiff"><span class="file-button" aria-hidden="true">Choose file</span><span class="file-selection" aria-live="polite">No files selected</span></span></label>
       <p class="hint">PNG, JPEG, or TIFF (8- or 16-bit, LZW or uncompressed). The first TIFF page is used. Images are processed locally in your browser.</p>
-      <div id="autoSettings" hidden>
-      <div class="channel">
-        <h3><span class="swatch a"></span> Channel A</h3>
-        <div class="settings"><label>Input color<select id="modeA" class="mode"></select></label><label>Custom color<input id="colorA" type="color" value="#ff0000" disabled></label></div>
-        <label>Minimum contrast<input id="thresholdA" type="number" min="0.1" max="255" step="0.1" value="13" required></label>
-      </div>
-      <div class="channel">
-        <h3><span class="swatch b"></span> Channel B</h3>
-        <div class="settings"><label>Input color<select id="modeB" class="mode"></select></label><label>Custom color<input id="colorB" type="color" value="#00ff00" disabled></label></div>
-        <label>Minimum contrast<input id="thresholdB" type="number" min="0.1" max="255" step="0.1" value="23" required></label>
-      </div>
-      <div class="settings metrics"><label>Cell diameter (px)<input id="diameter" type="number" min="4" max="64" step="1" value="22" required></label><label>Matching distance (px)<input id="match" type="number" min="1" max="64" step="1" value="7" required></label></div>
-      </div>
       <button class="primary" id="run">Open images</button>
       <p id="status" role="status" class="hint"></p>
       <details id="toneControls" hidden><summary>Image brightness and contrast</summary>
@@ -65,31 +48,11 @@
         <span class="hint" id="imagePixels"></span>
       </div>
       <div class="review" id="review" hidden>
-        <label>Image<select id="field"></select></label>
-        <label id="viewControl">Display<select id="view"><option value="merge">Composite</option><option value="a">A only</option><option value="b">B only</option><option value="original">Original image</option></select></label>
-        <label id="editControl">Edit<select id="edit"><option value="">View only</option><option value="a">Edit A</option><option value="b">Edit B</option></select></label>
         <div class="actions"><button type="button" id="deletePoint" disabled>Delete selected marker</button><button type="button" id="undo" disabled>Undo</button></div>
       </div>
       <div id="viewer" class="viewer"><p id="empty">Select and open an image to start counting.</p><canvas id="canvas" tabindex="0" aria-label="Image for reviewing and marking cell bodies" hidden></canvas></div>
-      <p id="reviewHelp" class="hint" hidden><span class="swatch a"></span> Channel A　<span class="swatch b"></span> Channel B. Click a cell body to add a marker. Select a marker and press Delete or use the delete button to remove it.</p>
-    <details id="sizePanel" hidden>
-        <summary>Candidate size distribution</summary>
-        <div class="sizeSettings">
-          <label>Small to medium cutoff (px)<input id="smallLimit" type="number" min="0.1" step="any" value="15" required></label>
-          <label>Medium to large cutoff (px)<input id="largeLimit" type="number" min="0.1" step="any" value="25" required></label>
-          <label class="overlayToggle"><input id="sizeOverlay" type="checkbox" checked> Show outlines</label>
-        </div>
-        <p class="hint">Size classes use equivalent diameter. Small is below the lower cutoff, medium is below the upper cutoff, and large starts at the upper cutoff. Percentages use measurable candidates as the denominator.</p>
-        <p id="sizeError" role="status" hidden>Enter positive cutoffs with the lower cutoff smaller than the upper cutoff.</p>
-        <div class="sizeTable"><table><thead><tr><th scope="col">Color</th><th scope="col">Measured</th><th scope="col">Excluded</th><th scope="col">Mean area (px²)</th><th scope="col">Mean equivalent diameter (px)</th><th scope="col">Small</th><th scope="col">Medium</th><th scope="col">Large</th></tr></thead><tbody id="sizeRows"></tbody></table></div>
-        <div class="sizeCharts">
-          <figure><figcaption>Candidate counts by area</figcaption><canvas id="areaHistogram" width="600" height="220" aria-label="Area histogram by channel" role="img"></canvas></figure>
-          <figure><figcaption>Candidate counts by equivalent diameter</figcaption><canvas id="diameterHistogram" width="600" height="220" aria-label="Equivalent diameter histogram by channel" role="img"></canvas></figure>
-        </div>
-        <p class="hint">Outlines and sizes are estimated from fluorescence intensity. Candidates at image or search boundaries or with insufficient local contrast are excluded.</p>
-      </details>
     </section>
   </div>
-  <p class="foot">For research use. Automatic detection uses local contrast and shape. Candidate matches are based on distance.</p>
+  <p class="foot">For research use. Mark cell bodies by visual inspection.</p>
 </main>
 </body></html>

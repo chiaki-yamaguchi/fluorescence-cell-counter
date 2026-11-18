@@ -1,22 +1,11 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const options = {red:'Red',green:'Green',blue:'Blue',magenta:'Magenta',cyan:'Cyan',yellow:'Yellow',gray:'Luminance',custom:'Custom color',off:'Off'};
-const parameters = ['modeA','modeB','colorA','colorB','thresholdA','thresholdB','diameter','match'];
-for (const channel of ['A','B']) {
-  const mode = $('mode'+channel);
-  for (const [value,label] of Object.entries(options)) mode.add(new Option(label,value));
-  mode.value = channel === 'A' ? 'red' : 'green';
-  mode.onchange = () => { $('color'+channel).disabled = mode.value !== 'custom'; };
-}
-
 const worker = new Worker('worker.js');
-let fields = [];
+let field = null;
 let preview = null;
 let selected = null;
-let sizeCache = new WeakMap();
 let manualView = 'a';
 let requestPending = false;
-const current = () => fields[Number($('field').value)];
 const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
 let pendingWorker;
@@ -27,26 +16,20 @@ worker.onmessage = ({data}) => {
   else resolve(data.result);
 };
 worker.onerror = event => {
-  pendingWorker?.reject(new Error(event.message || 'Could not start image analysis.'));
+  pendingWorker?.reject(new Error(event.message || 'Could not open the images.'));
   pendingWorker = null;
 };
 
-function processImage(field, analyze) {
+function loadImages(redFile, greenFile) {
   return new Promise((resolve,reject) => {
     pendingWorker = {resolve,reject};
-    worker.postMessage({file:field.file,paired:field.paired,config:field.config,analyze});
+    worker.postMessage({redFile,greenFile});
   });
 }
 
 function setBusy(value) {
   requestPending = value;
-  for (const id of ['run','field','files','paired']) $(id).disabled = value;
-}
-
-function channelLabel(config, channel) {
-  const mode = config['mode'+channel];
-  if (mode === 'off') return 'Channel '+channel;
-  return mode === 'custom' ? config['color'+channel] : options[mode];
+  for (const id of ['run','files','paired']) $(id).disabled = value;
 }
 
 function countRatioPercent({a,b,enabledA,enabledB}) {
@@ -72,19 +55,6 @@ function applyZoom() {
 $('zoom').onchange = applyZoom;
 window.addEventListener('resize',applyZoom);
 window.visualViewport?.addEventListener('resize',applyZoom);
-
-function updateMethod() {
-  const manual = $('method').value === 'manual';
-  $('autoSettings').hidden = manual;
-  for (const input of $('autoSettings').querySelectorAll('input[type=number]')) input.disabled = manual;
-  $('files').multiple = !manual;
-  $('primaryLabel').textContent = manual ? 'Red image (RBPMS)' : 'Select images';
-  $('secondaryLabel').textContent = manual ? 'Green image (EGFP)' : 'Separate image for channel B';
-  $('pairedHint').textContent = manual ? 'You can count using either image alone.' : 'Optional registered image paired with a single primary image.';
-  $('run').textContent = manual ? 'Open images' : 'Run detection';
-}
-$('method').onchange = updateMethod;
-updateMethod();
 
 for (const [id,key] of [['redImage','a'],['greenImage','b'],['bothImages','merge']]) {
   $(id).onclick = () => {
@@ -120,15 +90,11 @@ function toneMapper(channel) {
 }
 
 function display() {
-  const field = current();
   if (!field || !preview) return;
-  const manual = field.config.manual;
-  const manualMerge = manual && manualView === 'merge';
-  const source = manual ? preview[manualView === 'b' ? 'green' : 'red'] : preview;
-  const {w,h,planeA,planeB} = source;
-  const original = manual ? source.rgb : source.original;
+  const view = manualView;
+  const source = view === 'b' ? preview.green : preview.red;
+  const {w,h,rgb} = source;
   const {result} = field;
-  const view = manual ? manualView : $('view').value;
   const image = ctx.createImageData(w,h);
   const merged = view === 'merge';
   const showA = merged || view === 'a';
@@ -140,22 +106,12 @@ function display() {
   const showB = merged || view === 'b';
   for (let i=0;i<w*h;i++) {
     const j = i*4;
-    if (manualMerge) {
+    if (merged) {
       image.data[j] = adjustA(preview.red.rgb[0][i]);
       image.data[j+1] = adjustB(preview.green.rgb[1][i]);
-    } else if (manual) {
-      const adjust = view === 'a' ? adjustA : adjustB;
-      for (let c=0;c<3;c++) image.data[j+c] = adjust(original[c][i]);
-    } else if (view === 'original') {
-      image.data[j] = adjustA(original[0][i]);
-      image.data[j+1] = adjustB(original[1][i]);
-      image.data[j+2] = original[2][i];
     } else {
-      const a = showA ? adjustA(planeA?.[i] ?? 0) : 0;
-      const b = showB ? adjustB(planeB?.[i] ?? 0) : 0;
-      image.data[j] = merged ? a : a+b;
-      image.data[j+1] = merged ? b : a+b;
-      image.data[j+2] = merged ? 0 : a+b;
+      const adjust = showA ? adjustA : adjustB;
+      for (let c=0;c<3;c++) image.data[j+c] = adjust(rgb[c][i]);
     }
     image.data[j+3] = 255;
   }
@@ -164,69 +120,30 @@ function display() {
   $('zoomBar').hidden = false;
   $('imagePixels').textContent = `${w} × ${h} px`;
   canvas.hidden = false;
-  canvas.classList.toggle('edit',manual || Boolean($('edit').value) && view !== 'original');
-  $('manualBar').hidden = !manual;
-  $('viewControl').hidden = $('editControl').hidden = manual;
-  $('reviewHelp').hidden = manual;
+  canvas.classList.add('edit');
+  $('manualBar').hidden = false;
+  $('review').hidden = false;
   $('redImage').disabled = !result.enabledA;
   $('greenImage').disabled = !result.enabledB;
-  $('bothImages').disabled = !manual || !preview.red || !preview.green ||
+  $('bothImages').disabled = !preview.red || !preview.green ||
     preview.red.w !== preview.green.w || preview.red.h !== preview.green.h;
   $('bothImages').title = $('bothImages').disabled ? 'Registered images of the same size are required.' : '';
-  $('bothImages').setAttribute('aria-pressed',String(manualMerge));
+  $('bothImages').setAttribute('aria-pressed',String(merged));
   $('redImage').setAttribute('aria-pressed',String(manualView === 'a'));
   $('greenImage').setAttribute('aria-pressed',String(manualView === 'b'));
   $('empty').hidden = true;
   ctx.putImageData(image,0,0);
   ctx.lineWidth = Math.max(1.25,w/700);
-  const sizePanel = $('sizePanel');
-  sizePanel.hidden = manual;
-  if (!manual && sizePanel.open) {
-    const groups = [
-      {key:'a',plane:planeA,color:'#ff5757',label:channelLabel(field.config,'A'),visible:showA},
-      {key:'b',plane:planeB,color:'#48e76d',label:channelLabel(field.config,'B'),visible:showB},
-    ].filter(group => group.plane);
-    for (const group of groups) {
-      const points = result[group.key];
-      const threshold = group.key === 'a' ? field.config.thresholdA : field.config.thresholdB;
-      group.total = points.length;
-      group.cells = [];
-      ctx.strokeStyle = group.color;
+  for (const [key,color,visible] of [['a','#ff5757',showA],['b','#48e76d',showB]]) {
+    if (!visible) continue;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#fff';
+    for (const point of result[key]) {
       ctx.beginPath();
-      for (const point of points) {
-        if (!sizeCache.has(point)) {
-          sizeCache.set(point,measureCell(group.plane,w,h,point,field.config.diameter,threshold));
-        }
-        const cell = sizeCache.get(point);
-        if (!cell) continue;
-        group.cells.push(cell);
-        if (!$('sizeOverlay').checked || !(group.visible || view === 'original')) continue;
-        for (let i=0;i<cell.outline.length;i+=4) {
-          ctx.moveTo(cell.outline[i],cell.outline[i+1]);
-          ctx.lineTo(cell.outline[i+2],cell.outline[i+3]);
-        }
-      }
+      ctx.arc(point.x,point.y,merged && key === 'a' ? 4 : 2.5,0,Math.PI*2);
+      ctx.fill();
       ctx.stroke();
     }
-    showSizeStats(groups);
-  }
-  if (view !== 'original') {
-    for (const [key,color,visible] of [['a','#ff5757',showA],['b','#48e76d',showB]]) {
-      if (!visible) continue;
-      ctx.strokeStyle = color;
-      for (const point of result[key]) {
-        if (!manual && sizePanel.open && $('sizeOverlay').checked && sizeCache.get(point)) continue;
-        ctx.beginPath();
-        ctx.arc(point.x,point.y,manual ? (manualMerge && key === 'a' ? 4 : 2.5) : point.radius*0.67,0,Math.PI*2);
-        if (manual) {
-          ctx.fillStyle = color;
-          ctx.fill();
-          ctx.strokeStyle = '#fff';
-        }
-        ctx.stroke();
-      }
-    }
-
   }
   if (selected && (merged || (selected.keys[0] === 'a' ? showA : showB))) {
     const {x,y,radius} = selected.point;
@@ -239,93 +156,45 @@ function display() {
   $('deletePoint').disabled = !selected;
   $('countA').textContent = result.enabledA ? result.a.length : '—';
   $('countB').textContent = result.enabledB ? result.b.length : '—';
-  const labelA = channelLabel(field.config,'A');
-  const labelB = channelLabel(field.config,'B');
-  $('labelA').textContent = labelA;
-  $('labelB').textContent = labelB;
-  $('labelPercent').textContent = `${labelB} ÷ ${labelA}`;
   const percent = countRatioPercent(result);
   $('countPercent').textContent = percent === '' ? '—' : `${percent}%`;
-  $('countPercent').title = percent === '' ? '' : `${labelB} ${result.b.length} ÷ ${labelA} ${result.a.length} × 100`;
+  $('countPercent').title = percent === '' ? '' : `Green ${result.b.length} ÷ Red ${result.a.length} × 100`;
   $('undo').disabled = !field.history.length;
   $('png').disabled = false;
-  $('mergedPng').hidden = !manual || !preview.red || !preview.green;
+  $('mergedPng').hidden = !preview.red || !preview.green;
   $('mergedPng').disabled = $('mergedPng').hidden ||
     preview.red?.w !== preview.green?.w || preview.red?.h !== preview.green?.h;
-  $('mergedOptions').hidden = !manual || !preview.red;
+  $('mergedOptions').hidden = !preview.red;
   $('mergedPng').title = $('mergedPng').disabled ? 'Registered red and green images of the same size are required.' : 'Save the combined red and green image as PNG.';
-  document.body.classList.toggle('manualLoaded',manual);
+  document.body.classList.add('manualLoaded');
   applyZoom();
-}
-
-async function showField() {
-  $('png').disabled = $('mergedPng').disabled = true;
-  $('mergedOptions').hidden = true;
-  canvas.hidden = true;
-  $('zoomBar').hidden = true;
-  $('toneControls').hidden = true;
-  $('empty').hidden = false;
-  $('empty').textContent = 'Loading images…';
-  preview = await processImage(current(),false);
-  sizeCache = new WeakMap();
-  display();
 }
 
 $('form').onsubmit = async event => {
   event.preventDefault();
   if (requestPending) return;
-  let files = Array.from($('files').files);
-  let paired = $('paired').files[0];
-  const config = Object.fromEntries(parameters.map(id => [id,$(id).type === 'number' ? $(id).valueAsNumber : $(id).value]));
-  config.manual = $('method').value === 'manual';
-  if (config.manual) {
-    Object.assign(config,{modeA:'red',modeB:'green',greenOnly:!files.length && Boolean(paired)});
-    if (config.greenOnly) {
-      files = [paired];
-      paired = undefined;
-    }
-  }
-  if (!files.length || (paired && files.length !== 1) || (config.modeA === 'off' && config.modeB === 'off')) {
-    $('status').textContent = !files.length ? 'Select an image.' : paired && files.length !== 1 ? 'Select one primary image when using a separate secondary image.' : 'Select at least one channel.';
+  const redFile = $('files').files[0];
+  const greenFile = $('paired').files[0];
+  if (!redFile && !greenFile) {
+    $('status').textContent = 'Select an image.';
     return;
   }
   setBusy(true);
-  fields = [];
-  selected = null;
-  preview = null;
-  const errors = [];
-  $('review').hidden = $('reviewHelp').hidden = $('sizePanel').hidden = $('manualBar').hidden = true;
-  $('csv').disabled = $('png').disabled = true;
-  canvas.hidden = true;
-  $('zoomBar').hidden = true;
-  $('toneControls').hidden = true;
-  $('countPercent').title = '';
-  $('empty').hidden = false;
-  $('empty').textContent = 'Detecting cell candidates…';
-  for (const id of ['countA','countB','countPercent']) $(id).textContent = '—';
+  $('status').textContent = 'Loading images…';
   try {
-    for (const [i,file] of files.entries()) {
-      $('status').textContent = `${i+1} / ${files.length}　${file.name}`;
-      const field = {file,paired,config,history:[]};
-      try {
-        field.result = await processImage(field,true);
-        fields.push(field);
-      } catch (error) {
-        errors.push(`${file.name}（${error.message}）`);
-      }
-    }
-    $('field').replaceChildren(...fields.map(({file},i) => new Option(file.name,i)));
-    manualView = config.greenOnly ? 'b' : 'a';
-    $('view').value = 'merge';
-    $('edit').value = '';
-    if (fields.length) {
-      $('review').hidden = $('reviewHelp').hidden = false;
-      $('csv').disabled = false;
-      await showField();
-    } else {
-      $('empty').textContent = 'No images could be opened.';
-    }
-    $('status').textContent = [`${fields.length} / ${files.length} ${config.manual ? 'image sets loaded' : 'images analyzed'}`,...errors].join('　');
+    const images = await loadImages(redFile,greenFile);
+    preview = images;
+    field = {
+      redFile,
+      greenFile,
+      history: [],
+      result: {a:[],b:[],enabledA:!!images.red,enabledB:!!images.green},
+    };
+    manualView = images.red ? 'a' : 'b';
+    selected = null;
+    display();
+    $('csv').disabled = false;
+    $('status').textContent = 'Images loaded.';
   } catch (error) {
     $('status').textContent = error.message;
   } finally {
@@ -333,50 +202,18 @@ $('form').onsubmit = async event => {
   }
 };
 
-$('field').onchange = async () => {
-  if (requestPending) return;
-  setBusy(true);
-  selected = null;
-  preview = null;
-  try {
-    await showField();
-  } catch (error) {
-    $('empty').textContent = error.message;
-  } finally {
-    setBusy(false);
-  }
-};
-$('view').onchange = $('edit').onchange = () => {
-  selected = null;
-  display();
-};
-
-$('sizePanel').ontoggle = display;
-$('sizeOverlay').onchange = display;
-$('smallLimit').oninput = $('largeLimit').oninput = display;
-
-function refreshPairs(field) {
-  if (!field.config.manual) field.result.pairs = pairPoints(field.result.a,field.result.b,field.config.match);
-  display();
-}
-
 canvas.onclick = event => {
   if (requestPending || !preview) return;
-  const field = current();
-  const manual = field.config.manual;
-  const key = manual ? manualView : $('edit').value;
-  const view = manual ? manualView : $('view').value;
-  if (!key || view === 'original' || (view !== 'merge' && view !== key)) return;
-  if (key !== 'merge' && !field.result[key === 'a' ? 'enabledA' : 'enabledB']) return;
+  const key = manualView;
   const {red,green} = preview;
-  const syncGreen = manual && key === 'b' && red && green &&
+  const syncGreen = key === 'b' && red && green &&
     red.w === green.w && red.h === green.h;
   const keys = key === 'merge' ? ['a','b'] : [key];
   const rect = canvas.getBoundingClientRect();
   const x = Math.floor((event.clientX - rect.left) * canvas.width / rect.width);
   const y = Math.floor((event.clientY - rect.top) * canvas.height / rect.height);
   const points = keys.flatMap(channel => field.result[channel]);
-  const hitRadius = manual ? Math.max(3,4*canvas.width/rect.width) : Math.max(5,7*canvas.width/rect.width);
+  const hitRadius = Math.max(3,4*canvas.width/rect.width);
   let nearest = null;
   let distance = Infinity;
   for (const point of points) {
@@ -388,7 +225,7 @@ canvas.onclick = event => {
   }
   canvas.focus({preventScroll:true});
   if (nearest) {
-    const deleteChannels = manual && key === 'a' ? ['a','b'] : keys;
+    const deleteChannels = key === 'a' ? ['a','b'] : keys;
     selected = {keys:deleteChannels.filter(channel => field.result[channel].includes(nearest)),point:nearest};
     display();
     return;
@@ -411,14 +248,14 @@ canvas.onclick = event => {
     }
     b.push(match);
     selected = null;
-    refreshPairs(field);
+    display();
     return;
   }
   rememberPoints(field,keys);
   selected = null;
-  const point = {x,y,radius:manual ? 4 : field.config.diameter/2};
+  const point = {x,y,radius:4};
   for (const channel of keys) field.result[channel].push(point);
-  refreshPairs(field);
+  display();
 };
 function rememberPoints(field,keys) {
   field.history.push(keys.map(key => [key,[...field.result[key]]]));
@@ -426,12 +263,11 @@ function rememberPoints(field,keys) {
 
 function deleteSelected() {
   if (!selected || requestPending || !preview) return;
-  const field = current();
   const {keys,point} = selected;
   rememberPoints(field,keys);
   for (const key of keys) field.result[key] = field.result[key].filter(item => item !== point);
   selected = null;
-  refreshPairs(field);
+  display();
   canvas.focus({preventScroll:true});
 }
 
@@ -444,12 +280,11 @@ canvas.onkeydown = event => {
 
 $('undo').onclick = () => {
   if (requestPending || !preview) return;
-  const field = current();
   const previous = field.history.pop();
   if (!previous) return;
   selected = null;
   for (const [key,points] of previous) field.result[key] = points;
-  refreshPairs(field);
+  display();
 };
 
 function save(blob,name) {
@@ -461,12 +296,11 @@ function save(blob,name) {
 }
 $('png').onclick = () => {
   if (requestPending || $('png').disabled) return;
-  const field = current();
-  if (field.config.manual && manualView !== 'b') {
+  if (manualView !== 'b') {
     saveRbpmsPng(manualView === 'merge');
     return;
   }
-  const source = field.config.manual && manualView === 'b' && field.paired ? field.paired : field.file;
+  const source = field.greenFile;
   const name = source.name.replace(/\.[^.]+$/,'');
   canvas.toBlob(blob => { if (blob) save(blob,`${name}-overlay.png`); },'image/png');
 };
@@ -478,7 +312,6 @@ $('mergedPng').onclick = () => {
 function saveRbpmsPng(includeGreen) {
   const {red,green} = preview;
   const magenta = $('mergedColor').value === 'magenta';
-  const field = current();
   const output = document.createElement('canvas');
   output.width = red.w;
   output.height = red.h;
@@ -504,7 +337,7 @@ function saveRbpmsPng(includeGreen) {
       context.stroke();
     }
   }
-  const name = field.file.name.replace(/\.[^.]+$/,'');
+  const name = field.redFile.name.replace(/\.[^.]+$/,'');
   const color = magenta ? 'magenta' : 'red';
   const suffix = includeGreen ? color+'-green' : color;
   output.toBlob(blob => { if (blob) save(blob,`${name}-${suffix}.png`); },'image/png');
@@ -514,13 +347,22 @@ $('csv').onclick = () => {
     const safe = typeof value === 'string' && /^[=+\-@\t\r\n]/.test(value) ? "'"+value : value;
     return '"'+String(safe).replaceAll('"','""')+'"';
   };
-  const rows = [['Image','Secondary image','A color','B color','A count','B count','Candidate matches','B / A (%)','A contrast','B contrast','Diameter (px)','Matching distance (px)']];
-  for (const {file,paired,config,result} of fields) {
-    const {modeA,modeB,colorA,colorB,thresholdA,thresholdB,diameter,match} = config;
-    const {a,b,pairs,enabledA,enabledB} = result;
-    rows.push([file.name,paired?.name || '',modeA === 'custom' ? colorA : options[modeA],modeB === 'custom' ? colorB : options[modeB],
-      enabledA ? a.length : '',enabledB ? b.length : '',!config.manual && enabledA && enabledB ? pairs.length : '',
-      countRatioPercent(result),...(config.manual ? ['', '', '', ''] : [thresholdA,thresholdB,diameter,match])]);
-  }
+  const {redFile,greenFile,result} = field;
+  const rows = [
+    ['RBPMS image','EGFP image','RBPMS count','EGFP count','EGFP / RBPMS (%)'],
+    [redFile?.name || '',greenFile?.name || '',result.enabledA ? result.a.length : '',
+      result.enabledB ? result.b.length : '',countRatioPercent(result)],
+  ];
   save(new Blob(['\uFEFF',rows.map(row => row.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'cell-counts.csv');
 };
+
+for (const id of ['files', 'paired']) {
+  const input = document.getElementById(id);
+  const picker = input.closest('.file-picker');
+  const selection = picker.querySelector('.file-selection');
+  input.addEventListener('change', () => {
+    const names = Array.from(input.files, file => file.name).join(', ');
+    selection.textContent = names || 'No files selected';
+    selection.title = names;
+  });
+}

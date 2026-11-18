@@ -89,3 +89,9 @@ canvas.edit{cursor:crosshair}
 #toneA legend{color:var(--red)}
 #toneB legend{color:var(--green)}
 .mergedOptions{display:flex;flex-wrap:wrap;align-items:end;gap:6px 14px;margin-bottom:10px}
+
+.file-picker{position:relative;display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;cursor:pointer}
+.file-picker input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}
+.file-button{flex:none;border:1px solid #54617a;border-radius:5px;padding:3px 7px}
+.file-picker:focus-within .file-button{outline:2px solid currentColor;outline-offset:2px}
+.file-selection{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
