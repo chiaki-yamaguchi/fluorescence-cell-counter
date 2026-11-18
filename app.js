@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const palette = {
+  original: {rgb:[1,1,1], ink:'#c7d4e5', marker:'#ffffff'},
   red: {rgb:[1,0,0], ink:'#ff5757', marker:'#6cf5ff'},
   green: {rgb:[0,1,0], ink:'#48e76d', marker:'#ff4040'},
   blue: {rgb:[0,0,1], ink:'#80aaff', marker:'#ffd34f'},
@@ -104,14 +105,21 @@ function paintImage(context, view) {
   const source = showA ? preview.red : preview.green;
   const {w,h} = source;
   const image = context.createImageData(w,h);
-  const rgbA = colorFor('A').rgb;
-  const rgbB = colorFor('B').rgb;
-  const adjustA = toneMapper('A');
-  const adjustB = toneMapper('B');
+  const layers = [];
+  if (showA) layers.push(['A',preview.red]);
+  if (showB) layers.push(['B',preview.green]);
+  for (const [channel,source] of layers) {
+    const adjust = toneMapper(channel);
+    const {rgb} = colorFor(channel);
+    const original = colorChoice(channel) === 'original' ? source.rgb : null;
+    for (let i=0;i<w*h;i++) {
+      const intensity = adjust(source.intensity[i]);
+      for (let c=0;c<3;c++) {
+        image.data[i*4+c] += original ? adjust(original[c][i]) : intensity*rgb[c];
+      }
+    }
+  }
   for (let i=0;i<w*h;i++) {
-    const a = showA ? adjustA(preview.red.intensity[i]) : 0;
-    const b = showB ? adjustB(preview.green.intensity[i]) : 0;
-    for (let c=0;c<3;c++) image.data[i*4+c] = a*rgbA[c]+b*rgbB[c];
     image.data[i*4+3] = 255;
   }
   context.putImageData(image,0,0);

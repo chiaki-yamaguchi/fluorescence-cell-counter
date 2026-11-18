@@ -25,11 +25,12 @@ self.onmessage = async ({data:{redFile, greenFile}}) => {
       const intensity = g && b
         ? Uint8ClampedArray.from(r,(value,i) => Math.max(value,g[i],b[i]))
         : Uint8ClampedArray.from(r);
-      return {w,h,intensity};
+      const rgb = g && b ? planes.map(plane => Uint8ClampedArray.from(plane)) : null;
+      return {w,h,intensity,rgb};
     }
     const red = await readChannel(redFile);
     const green = await readChannel(greenFile);
-    const buffers = [red,green].filter(Boolean).map(image => image.intensity.buffer);
+    const buffers = [red,green].filter(Boolean).flatMap(({intensity,rgb}) => [intensity,...(rgb || [])].map(plane => plane.buffer));
     self.postMessage({result:{red,green}},buffers);
   } catch (error) {
     self.postMessage({error:error.message});
