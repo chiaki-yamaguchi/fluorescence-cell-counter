@@ -1,10 +1,10 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const palette = {
-  red: {rgb:[1,0,0], ink:'#ff5757'},
-  green: {rgb:[0,1,0], ink:'#48e76d'},
-  blue: {rgb:[0,0,1], ink:'#80aaff'},
-  magenta: {rgb:[1,0,1], ink:'#f17df2'},
+  red: {rgb:[1,0,0], ink:'#ff5757', marker:'#6cf5ff'},
+  green: {rgb:[0,1,0], ink:'#48e76d', marker:'#ff4040'},
+  blue: {rgb:[0,0,1], ink:'#80aaff', marker:'#ffd34f'},
+  magenta: {rgb:[1,0,1], ink:'#f17df2', marker:'#baff64'},
 };
 const colorChoice = channel => $('color'+channel).value;
 const colorFor = channel => palette[colorChoice(channel)];
@@ -120,8 +120,8 @@ function paintImage(context, view) {
 function paintMarkers(context, view, width) {
   context.lineWidth = Math.max(1.25,width/700);
   for (const key of view === 'merge' ? ['a','b'] : [view]) {
-    context.fillStyle = colorFor(key.toUpperCase()).ink;
-    context.strokeStyle = '#fff';
+    context.fillStyle = colorFor(key.toUpperCase()).marker;
+    context.strokeStyle = '#11141a';
     for (const {x,y} of field.result[key]) {
       context.beginPath();
       context.arc(x,y,view === 'merge' && key === 'a' ? 4 : 2.5,0,Math.PI*2);
@@ -170,9 +170,12 @@ function display() {
   if (selected && (merged || selected.keys.includes(view))) {
     const {x,y,radius} = selected.point;
     ctx.beginPath();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(2,w/400);
     ctx.arc(x,y,radius*0.67+4,0,Math.PI*2);
+    ctx.lineWidth = Math.max(2,w/400);
+    ctx.strokeStyle = '#11141a';
+    ctx.stroke();
+    ctx.lineWidth /= 2;
+    ctx.strokeStyle = '#ffffff';
     ctx.stroke();
   }
   $('deletePoint').disabled = !selected;
