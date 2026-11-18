@@ -113,7 +113,7 @@ function paintImage(context, view) {
     const {rgb} = colorFor(channel);
     const original = colorChoice(channel) === 'original' ? source.rgb : null;
     for (let i=0;i<w*h;i++) {
-      const intensity = adjust(source.intensity[i]);
+      const intensity = original ? 0 : adjust(source.intensity[i]);
       for (let c=0;c<3;c++) {
         image.data[i*4+c] += original ? adjust(original[c][i]) : intensity*rgb[c];
       }
@@ -161,7 +161,6 @@ function display() {
   $('zoomBar').hidden = false;
   $('imagePixels').textContent = `${w} × ${h} px`;
   canvas.hidden = false;
-  canvas.classList.add('edit');
   $('manualBar').hidden = false;
   $('review').hidden = false;
   $('redImage').disabled = !result.enabledA;
