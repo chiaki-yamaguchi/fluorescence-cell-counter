@@ -25,3 +25,7 @@ The optional automatic candidate detector uses local contrast and shape. The man
 ## Suggested manuscript wording
 
 > RBPMS-positive and EGFP-positive cell bodies were identified by visual inspection of paired fluorescence images of the same peripheral retinal fields. Individual cell bodies were marked on the images and tallied using Fluorescence Cell Counter, a browser-based tool for manual annotation and counting. For each retina, counts were summed across the sampled fields. Transduction efficiency was estimated as the total EGFP-positive cell-body count divided by the total RBPMS-positive cell-body count, expressed as a percentage.
+
+## License
+
+This software is available under the [MIT License](LICENSE). Citation metadata is available in [CITATION.cff](CITATION.cff).
